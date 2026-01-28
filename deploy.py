@@ -4,6 +4,8 @@ import numpy as np
 from PIL import Image
 import io
 import time
+import json
+from pathlib import Path
 
 app = FastAPI()
 
@@ -16,6 +18,7 @@ CLASS_NAMES = [
     "samosa",
     "seekh_kebab",
 ]
+IMAGENET_LABELS_PATH = "imagenet_class_index.json"
 
 # Load once at startup
 model = tf.keras.models.load_model(MODEL_PATH)
@@ -41,6 +44,21 @@ def top_k_list(probs, labels, k):
     k = max(1, min(int(k), len(probs)))
     idxs = np.argsort(probs)[-k:][::-1]
     return [{"label": labels[i], "confidence": float(probs[i])} for i in idxs]
+
+def load_imagenet_labels():
+    path = Path(IMAGENET_LABELS_PATH)
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    # Expected format: {"0": ["n01440764", "tench"], ...}
+    labels = [None] * len(data)
+    for k, v in data.items():
+        idx = int(k)
+        label = v[1] if isinstance(v, list) and len(v) > 1 else str(v)
+        labels[idx] = label
+    return labels
+
+IMAGENET_LABELS = load_imagenet_labels()
 
 def preprocess_image(file_bytes):
     img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
@@ -82,7 +100,10 @@ async def predict(
 
     # ImageNet head (optional if multi-head model)
     if imagenet_probs is not None:
-        imagenet_labels = [str(i) for i in range(len(imagenet_probs))]
+        if IMAGENET_LABELS is None:
+            imagenet_labels = [str(i) for i in range(len(imagenet_probs))]
+        else:
+            imagenet_labels = IMAGENET_LABELS
         response["imagenet"] = {
             "top_k": top_k_list(imagenet_probs, imagenet_labels, imagenet_top_k),
         }
