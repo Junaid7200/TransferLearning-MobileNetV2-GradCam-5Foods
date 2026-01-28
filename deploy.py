@@ -50,11 +50,16 @@ def load_imagenet_labels():
     if not path.exists():
         return None
     data = json.loads(path.read_text(encoding="utf-8"))
-    # Expected format: {"0": ["n01440764", "tench"], ...}
+    # Expected format:
+    # - {"0": ["n01440764", "tench"], ...} OR
+    # - {"0": "tench, Tinca tinca", ...}
     labels = [None] * len(data)
     for k, v in data.items():
         idx = int(k)
-        label = v[1] if isinstance(v, list) and len(v) > 1 else str(v)
+        if isinstance(v, list) and len(v) > 1:
+            label = v[1]
+        else:
+            label = str(v)
         labels[idx] = label
     return labels
 
